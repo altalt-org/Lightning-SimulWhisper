@@ -1,5 +1,7 @@
 # SimulStreamingMLX
 
+⚠️ This is a very unfinished project. Please feel free to leave issues or pull requests when you find problems ⚠️
+
 SimulStreamingMLX implements Whisper model for simultaneous transcription using **MLX** (Apple's machine learning framework) and **CoreML** for optimal performance on Apple Silicon devices. It uses the AlignAtt policy for streaming speech recognition.
 
 **This implementation enables real-time speech-to-text (STT) on Apple Silicon devices**, achieving sub-second latency while maintaining high transcription quality through the combination of MLX's optimized decoder and CoreML's Neural Engine acceleration.
