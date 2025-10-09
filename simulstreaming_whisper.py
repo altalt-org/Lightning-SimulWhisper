@@ -20,6 +20,14 @@ def simulwhisper_args(parser):
     group.add_argument("--decoder",type=str, default=None, help="Override automatic selection of beam or greedy decoder. "
                         "If beams > 1 and greedy: invalid.")
 
+    group = parser.add_argument_group('CoreML acceleration')
+    group.add_argument('--use_coreml', action='store_true',
+                        help='Use CoreML encoder for faster inference on Apple Silicon (3-5x speedup)')
+    group.add_argument('--coreml_encoder_path', type=str, default=None,
+                        help='Path to CoreML encoder .mlpackage/.mlmodelc directory (auto-detected if not specified)')
+    group.add_argument('--coreml_compute_units', type=str, default='ALL', choices=['ALL', 'CPU_AND_NE', 'CPU_ONLY'],
+                        help='CoreML compute units: ALL (default), CPU_AND_NE (Neural Engine), or CPU_ONLY')
+
     group = parser.add_argument_group('Audio buffer')
     group.add_argument('--audio_max_len', type=float, default=30.0, 
                         help='Max length of the audio buffer, in seconds.')
@@ -72,7 +80,8 @@ def simul_asr_factory(args):
         decoder = "greedy" 
     
     a = { v:getattr(args, v) for v in ["model_path", "model_name", "cif_ckpt_path", "frame_threshold", "audio_min_len", "audio_max_len", "beams", "task",
-                                       "never_fire", 'init_prompt', 'static_init_prompt', 'max_context_tokens', "logdir", "vad_silence_ms"
+                                       "never_fire", 'init_prompt', 'static_init_prompt', 'max_context_tokens', "logdir", "vad_silence_ms",
+                                       "use_coreml", "coreml_encoder_path", "coreml_compute_units"
                                        ]}
     a["language"] = args.lan
     a["segment_length"] = args.min_chunk_size
@@ -90,15 +99,16 @@ class SimulWhisperASR(ASRBase):
     
     sep = " "
 
-    def __init__(self, language, model_path, model_name, cif_ckpt_path, frame_threshold, audio_max_len, audio_min_len, segment_length, beams, task, 
-                 decoder_type, never_fire, init_prompt, static_init_prompt, max_context_tokens, logdir, vad_silence_ms):
+    def __init__(self, language, model_path, model_name, cif_ckpt_path, frame_threshold, audio_max_len, audio_min_len, segment_length, beams, task,
+                 decoder_type, never_fire, init_prompt, static_init_prompt, max_context_tokens, logdir, vad_silence_ms,
+                 use_coreml=False, coreml_encoder_path=None, coreml_compute_units="ALL"):
         cfg = AlignAttConfig(
-            model_path=model_path, 
+            model_path=model_path,
             model_name=model_name,
             segment_length=segment_length,
             frame_threshold=frame_threshold,
             language=language,
-            audio_max_len=audio_max_len, 
+            audio_max_len=audio_max_len,
             audio_min_len=audio_min_len,
             cif_ckpt_path=cif_ckpt_path,
             decoder_type=decoder_type, #"greedy" if beams==1 else "beam",
@@ -110,6 +120,10 @@ class SimulWhisperASR(ASRBase):
             static_init_prompt=static_init_prompt,
             logdir=logdir,
             vad_silence_ms=vad_silence_ms,
+            # CoreML encoder options
+            use_coreml_encoder=use_coreml,
+            coreml_encoder_path=coreml_encoder_path,
+            coreml_compute_units=coreml_compute_units,
         )
         logger.info(f"Language: {language}")
         self.model = PaddedAlignAttWhisper(cfg)

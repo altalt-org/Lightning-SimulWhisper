@@ -1,4 +1,4 @@
 mlx_*/
 __pycache__/
 *.mp3
-whisper.cpp/
+# whisper.cpp/

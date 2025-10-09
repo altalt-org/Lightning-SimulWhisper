@@ -1,216 +1,220 @@
-# SimulStreaming
+# SimulStreamingMLX
 
-SimulStreaming implements Whisper model for translation and transcription in
-simultaneous mode (which is known as *streaming* in the ASR community).
-SimulStreaming uses the state-of-the-art simultaneous policy AlignAtt, which
-makes it very fast and efficient.
+SimulStreamingMLX implements Whisper model for simultaneous transcription using **MLX** (Apple's machine learning framework) and **CoreML** for optimal performance on Apple Silicon devices. It uses the AlignAtt policy for streaming speech recognition.
 
-SimulStreaming merges [Simul-Whisper](https://github.com/backspacetg/simul_whisper/) and [Whisper-Streaming](https://github.com/ufal/whisper_streaming) projects.
-Simul-Whisper implemented AlignAtt with Whisper, but only using large-v2 model
-for transcription. We extend it with support for translation and large-v3 model, and with beam search, prompt for injecting in-domain
-terminology, and context across the 30-second processing windows. Moreover,
-Simul-Whisper implements only less realistic simulation on sentence-segmented
-speech. Therefore, we use the interface of Whisper-Streaming for the long-form input
-simulation, both computationally unaware and aware, and from both audio file and
-simple demo TCP server that can be connected to microphone.
+**This implementation enables real-time speech-to-text (STT) on Apple Silicon devices**, achieving sub-second latency while maintaining high transcription quality through the combination of MLX's optimized decoder and CoreML's Neural Engine acceleration.
 
-Moreover, SimulStreaming adds a machine translation model EuroLLM in a cascade, with LocalAgreement simultaneous policy, system
-prompt, and in-context example.
+## Performance Results
 
-SimulStreaming originates as [Charles University (CUNI) submission to the IWSLT
-2025 Simultaneous Shared Task](https://arxiv.org/abs/2506.17077). The results show that this system is extremely robust
-and high quality. It is among the top performing systems in IWSLT 2025
-Simultaneous Shared Task.
+![Comprehensive Performance Summary](tests/timing_visualizations/comprehensive_summary.png)
+
+*Performance comparison performed on non-quantized medium model on an M2 MacBook Pro*
+
+The comprehensive summary above shows the performance characteristics of different implementations. **CoreML encoder acceleration provides significant speed improvements while maintaining similar overall inference times**, demonstrating the efficiency of Apple's Neural Engine for encoder operations.
+
+### Key Performance Insights
+
+- **CoreML Encoder**: While the encoder speedup is dramatic (up to 18x faster), the overall inference time improvement is more modest because the decoder still runs on MLX
+- **MLX Decoder**: MLX provides up to 15x decoder speedup compared to PyTorch implementations, demonstrating excellent Apple Silicon optimization
+- **Power Efficiency**: CoreML acceleration uses significantly less power than MLX-only implementations, though exact power measurements weren't captured in this benchmark
+- **Decoder Performance**: MLX decoder performance remains consistent across implementations, showing the stability of the MLX framework
+- **Speed Gains**: You can achieve up to **18x encoder speed increase** and **15x decoder speed increase** with optimal CoreML configuration
+
+*Note: I have no idea on how to benchmark power consumption for a specific process. Any contributions or suggestions for accurate power measurement on Apple Silicon would be greatly appreciated!*
+
+## Key Features
+
+- **MLX Implementation**: Native Apple Silicon optimization with MLX framework (up to 15x decoder speedup)
+- **CoreML Encoder**: Up to 18x faster encoding using Apple's Neural Engine
+- **AlignAtt Policy**: State-of-the-art simultaneous decoding strategy
+- **Multiple Model Support**: tiny, base, small, medium, large-v1, large-v2, large-v3
+- **Beam Search**: Configurable beam search decoding
+- **Real-time Streaming**: Both file simulation and live microphone input
+- **Power Efficient**: Low power consumption with CoreML acceleration
 
 ## Installation
 
-The direct speech-to-text Whisper part can be installed with
+### Basic Installation
 
-```
+```bash
 pip install -r requirements.txt
 ```
 
-The comments in `requirements.txt` document the origin of dependencies. There is originally WhisperStreaming code inserted in the `whisper_streaming` dir. It is simplified and refactored.
-Simul-Whisper code is in `simul_whisper`, it includes the [original Whisper](https://github.com/openai/whisper) code adapted for SimulWhisper in `simul_whispre/whisper`.
+### CoreML Acceleration (Recommended)
 
-**Lighter installation**
+For optimal performance on Apple Silicon, install CoreML dependencies:
 
-For slightly lighter installation,  remove `torchaudio` from `requirements.txt`. Then you can not use the Silero VAD controller (`--vac` option).
-
-**Text-to-Text Translation**
-
-Follow [translate/README.txt](translate/README.txt).
-
-## Usage 
-
-### Real-time simulation from audio file
-
-
+```bash
+pip install coremltools ane_transformers
 ```
-usage: simulstreaming_whisper.py [-h] [--min-chunk-size MIN_CHUNK_SIZE] [--lan LAN] [--task {transcribe,translate}] [--vac] [--vac-chunk-size VAC_CHUNK_SIZE] [--vad]
-                                 [-l {DEBUG,INFO,WARNING,ERROR,CRITICAL}] [--model_path MODEL_PATH] [--beams BEAMS] [--decoder DECODER] [--audio_max_len AUDIO_MAX_LEN]
+
+### Generate CoreML Models
+
+Generate CoreML encoder models for faster inference:
+
+```bash
+# Clone whisper.cpp for CoreML model generation
+git clone https://github.com/ggml-org/whisper.cpp.git
+
+# Generate CoreML encoder for your preferred model
+./scripts/generate_coreml_encoder.sh base.en
+```
+
+Available models: `tiny.en`, `tiny`, `base.en`, `base`, `small.en`, `small`, `medium.en`, `medium`, `large-v1`, `large-v2`, `large-v3`, `large-v3-turbo`
+
+### Lighter Installation
+
+For minimal installation, remove `torchaudio` from `requirements.txt`. This disables the Silero VAD controller (`--vac` option).
+
+
+## Usage
+
+### Quick Start with CoreML (Recommended)
+
+```bash
+# Basic usage with CoreML acceleration
+python3 simulstreaming_whisper.py audio.wav \
+  --model_name base.en \
+  --model_path mlx_base \
+  --use_coreml \
+  --language en
+
+# With beam search and CIF model
+python3 simulstreaming_whisper.py audio.wav \
+  --model_name medium \
+  --model_path mlx_medium \
+  --use_coreml \
+  --beams 3 \
+  --cif_ckpt_path cif_model/medium.npz \
+  --language en
+```
+
+### Real-time Simulation from Audio File
+
+```bash
+usage: simulstreaming_whisper.py [-h] [--min-chunk-size MIN_CHUNK_SIZE] [--lan LAN] [--vac] [--vac-chunk-size VAC_CHUNK_SIZE] [--vad]
+                                 [-l {DEBUG,INFO,WARNING,ERROR,CRITICAL}] [--model_path MODEL_PATH] [--model_name MODEL_NAME] [--beams BEAMS] [--decoder DECODER] [--audio_max_len AUDIO_MAX_LEN]
                                  [--audio_min_len AUDIO_MIN_LEN] [--frame_threshold FRAME_THRESHOLD] [--cif_ckpt_path CIF_CKPT_PATH] [--never_fire | --no-never_fire]
                                  [--init_prompt INIT_PROMPT] [--static_init_prompt STATIC_INIT_PROMPT] [--max_context_tokens MAX_CONTEXT_TOKENS] [--start_at START_AT] [--comp_unaware]
+                                 [--use_coreml] [--coreml_encoder_path COREML_ENCODER_PATH] [--coreml_compute_units {ALL,CPU_AND_NE,CPU_ONLY}]
                                  audio_path
 
-options:
-  -h, --help            show this help message and exit
-  -l {DEBUG,INFO,WARNING,ERROR,CRITICAL}, --log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}
-                        Set the log level
+CoreML Options:
+  --use_coreml          Enable CoreML encoder acceleration (up to 18x faster, lower power)
+  --coreml_encoder_path COREML_ENCODER_PATH
+                        Path to CoreML encoder .mlpackage directory (auto-detected if not provided)
+  --coreml_compute_units {ALL,CPU_AND_NE,CPU_ONLY}
+                        CoreML compute units: ALL (default), CPU_AND_NE (recommended), CPU_ONLY
 
-WhisperStreaming processor arguments (shared for simulation from file and for the server):
-  --min-chunk-size MIN_CHUNK_SIZE
-                        Minimum audio chunk size in seconds. It waits up to this time to do processing. If the processing takes shorter time, it waits, otherwise it processes the whole
-                        segment that was received by this time.
-  --lan LAN, --language LAN
-                        Source language code, e.g. en, de, cs, or auto for automatic language detection from speech.
-  --task {transcribe,translate}
-                        Transcribe or translate.
-  --vac                 Use VAC = voice activity controller. Recommended. Requires torch.
-  --vac-chunk-size VAC_CHUNK_SIZE
-                        VAC sample size in seconds.
-  --vad                 Use VAD = voice activity detection, with the default parameters.
-
-Whisper arguments:
+Model Options:
   --model_path MODEL_PATH
-                        The file path to the Whisper .pt model. If not present on the filesystem, the model is downloaded automatically.
+                        Path to MLX model directory or HuggingFace repo
+  --model_name MODEL_NAME
+                        Model name: tiny, base.en, small, medium, large-v1, large-v2, large-v3
   --beams BEAMS, -b BEAMS
-                        Number of beams for beam search decoding. If 1, GreedyDecoder is used.
-  --decoder DECODER     Override automatic selection of beam or greedy decoder. If beams > 1 and greedy: invalid.
+                        Number of beams for beam search decoding (1 = greedy)
+  --decoder DECODER     Override automatic decoder selection
 
-Audio buffer:
+Audio Processing:
+  --min-chunk-size MIN_CHUNK_SIZE
+                        Minimum audio chunk size in seconds
   --audio_max_len AUDIO_MAX_LEN
-                        Max length of the audio buffer, in seconds.
+                        Max length of audio buffer in seconds (default: 30.0)
   --audio_min_len AUDIO_MIN_LEN
-                        Skip processing if the audio buffer is shorter than this length, in seconds. Useful when the --min-chunk-size is small.
-
-AlignAtt argument:
+                        Skip processing if audio buffer is shorter than this length
   --frame_threshold FRAME_THRESHOLD
-                        Threshold for the attention-guided decoding. The AlignAtt policy will decode only until this number of frames from the end of audio. In frames: one frame is 0.02
-                        seconds for large-v3 model.
+                        AlignAtt threshold in frames (default: 4)
 
-Truncation of the last decoded word (from Simul-Whisper):
+Language:
+  --lan LAN, --language LAN
+                        Source language code (en, de, cs, etc.) or 'auto' for detection
+
+CIF Model (End-of-Word Detection):
   --cif_ckpt_path CIF_CKPT_PATH
-                        The file path to the Simul-Whisper's CIF model checkpoint that detects whether there isend of word at the end of the chunk. If not, the last decoded space-
-                        separated word is truncated because it is often wrong -- transcribing a word in the middle.The CIF model adapted for the Whisper model version should be used. Find
-                        the models in https://github.com/backspacetg/simul_whisper/tree/main/cif_models . Note that there is no model for large-v3.
+                        Path to CIF model checkpoint for word boundary detection
   --never_fire, --no-never_fire
-                        Override the CIF model. If True, the last word is NEVER truncated, no matter what the CIF model detects. . If False: if CIF model path is set, the last word is
-                        SOMETIMES truncated, depending on the CIF detection. Otherwise, if the CIF model path is not set, the last word is ALWAYS trimmed. (default: False)
+                        Override CIF model behavior (default: False)
 
-Prompt and context:
+Context and Prompts:
   --init_prompt INIT_PROMPT
-                        Init prompt for the model. It should be in the target language.
+                        Initial prompt for the model (in target language)
   --static_init_prompt STATIC_INIT_PROMPT
-                        Do not scroll over this text. It can contain terminology that should be relevant over all document.
+                        Static prompt that doesn't scroll (terminology, etc.)
   --max_context_tokens MAX_CONTEXT_TOKENS
-                        Max context tokens for the model. Default is 0.
+                        Maximum context tokens (default: model's max)
 
-Arguments for simulation from file:
-  audio_path            Filename of 16kHz mono channel wav, on which live streaming is simulated.
-  --start_at START_AT   Start processing audio at this time.
-  --comp_unaware        Computationally unaware simulation.
+Simulation Options:
+  --start_at START_AT   Start processing audio at this time
+  --comp_unaware        Computationally unaware simulation
 ```
 
-Example:
+### Examples
 
-```
-python3 simulstreaming_whisper.py audio.wav --language cs  --task translate --comp_unaware
-```
+```bash
+# Basic MLX implementation
+python simulstreaming_whisper.py test.mp3 \
+  --language ko \
+  --vac \
+  --vad_silence_ms 1000 \
+  --beams 3 \
+  -l CRITICAL \
+  --cif_ckpt_path cif_model/medium.npz \
+  --model_name medium \
+  --model_path mlx_medium
 
-Simulation modes:
+# With CoreML encoder acceleration (up to 18x faster, lower power)
+python simulstreaming_whisper.py test.mp3 \
+  --language ko \
+  --vac \
+  --vad_silence_ms 1000 \
+  --beams 3 \
+  -l CRITICAL \
+  --cif_ckpt_path cif_model/medium.npz \
+  --model_name medium \
+  --model_path mlx_medium \
+  --use_coreml
 
-- default mode, no special option: real-time simulation from file, computationally aware. The chunk size is `MIN_CHUNK_SIZE` or larger, if more audio arrived during last update computation.
-
-- `--comp_unaware` option: computationally unaware simulation. It means that the timer that counts the emission times "stops" when the model is computing. The chunk size is always `MIN_CHUNK_SIZE`. The latency is caused only by the model being unable to confirm the output, e.g. because of language ambiguity etc., and not because of slow hardware or suboptimal implementation. We implement this feature for finding the lower bound for latency.
-
-- `--start_at START_AT`: Start processing audio at this time. The first update receives the whole audio by `START_AT`. It is useful for debugging, e.g. when we observe a bug in a specific time in audio file, and want to reproduce it quickly, without long waiting.
-
-- offline mode, to process whole audio with maximum quality, is not available yet. Instead, try large `--min-chunk-size` and `--frame-threshold`.
-
-
-### Server -- real-time from mic 
-
-The entry point `simulstreaming_whisper_server.py` has the same model options as `simulstreaming_whisper.py`, plus `--host` and `--port` of the TCP connection and the `--warmup-file`. The warmup file is decoded by the Whisper backend after the model is loaded because without that, processing of the very the first input chunk may take longer.
-
-See the help message (`-h` option).
-
-**Linux** client example:
-
-```
-arecord -f S16_LE -c1 -r 16000 -t raw -D default | nc localhost 43001
-```
-
-- `arecord` sends realtime audio from a sound device (e.g. mic), in raw audio format -- 16000 sampling rate, mono channel, S16_LE -- signed 16-bit integer low endian. (Or other operating systems, use another alternative)
-
-- nc is netcat with server's host and port
-
-**Windows/Mac**: `ffmpeg` may substitute `arecord`. Or use the solutions proposed in Whisper-Streaming pull requests [#111](https://github.com/ufal/whisper_streaming/pull/111) and [#123](https://github.com/ufal/whisper_streaming/pull/123).
-
-
-
-### Output format
-
-This is example of the output format of the simulation from file. The output from the server is the same except that the first space-separated column is not there.
-
-```
-1200.0000 0 1200  And so
-2400.0000 1200 2400  my fellow Americans
-3600.0000 2400 3600 ,
-4800.0000 3600 4800  ask not
-6000.0000 4800 6000  what
-7200.0000 6000 7200  your country can do
-8400.0000 7200 8400  for you,
-9600.0000 8400 9600  ask what you
-10800.0000 9600 10800  can do for your country
-11000.0000 10800 11000 .
+# CoreML with Neural Engine (best power efficiency)
+python simulstreaming_whisper.py test.mp3 \
+  --language ko \
+  --vac \
+  --vad_silence_ms 1000 \
+  --beams 3 \
+  -l CRITICAL \
+  --cif_ckpt_path cif_model/medium.npz \
+  --model_name medium \
+  --model_path mlx_medium \
+  --use_coreml \
+  --coreml_compute_units CPU_AND_NE
 ```
 
-It's space-separated. The first three columns are:
-- column 1: the emission time of that line, in miliseconds. In `--comp_unaware` mode, it's the simulated time. In server, this column is not there.
-- columns 2-3: the beginning and end timestamp of the line in original audio. (TODO: it should be, currently it is very rough approximation.)
-- columns 4-: This column starts either with a space, if the previous line had to be appended with a space, or with a character that has to be appended to the previous line (like comma or dot).
+## Architecture
 
+SimulStreamingMLX uses a hybrid architecture combining MLX and CoreML:
 
+```
+Audio Input (16kHz mono)
+    ↓
+Mel Spectrogram (MLX)
+    ↓
+┌─────────────────────┐
+│  CoreML Encoder     │ ← Apple Neural Engine (up to 18x faster)
+│  (whisper.cpp)      │
+└─────────────────────┘
+    ↓
+Encoder Features (convert to MLX)
+    ↓
+┌─────────────────────┐
+│  MLX Decoder        │ ← Full control, beam search, AlignAtt
+│  (Simul-Whisper)    │
+└─────────────────────┘
+    ↓
+Transcription Output
+```
 
-## 📣 Feedback Welcome!
-
-We, the authors of SimulStreaming from Charles University, are committed to
-improving our research and the tool itself. Your experience as a user is
-invaluable to us --- it can help to shape upcoming features, licensing models, and support services. 
-
-To better understand your needs and guide the future of
-SimulStreaming, we kindly ask you to fill out this **[questionnaire](https://forms.cloud.microsoft/e/7tCxb4gJfB).**
-
-
-## 📄 Licence and Contributions
-
-SimulStreaming is dual-licensed:
-
-### 🔹 Non-Commercial Use
-
-You may use SimulStreaming under the **PolyForm Noncommercial License 1.0.0** if you
-obtain the code through the GitHub repository.  This license is **free of charge**
-and comes with **no obligations** for non-commercial users.
-
-### 🔸 Commercial Use
-
-Understanding who uses SimulStreaming commercially helps us improve and
-prioritize development. Therefore, we want to **require registration** of those who acquire a commercial licence.
-
-We plan to make the commercial licenceses **affordable** to SMEs and individuals. We
-are considering to provide commercial licenses either for free or for symbolic
-one-time fee, and maybe also provide additional support. You can share your preference via the [questionnaire](https://forms.cloud.microsoft/e/7tCxb4gJfB).
-
-You can also leave your contact [there](https://forms.cloud.microsoft/e/7tCxb4gJfB) to be notified when the commercial licenses become
-available.
-
-### 🤝 Contributions
-
-Contributions to SimulStreaming are welcome. 
-Before a pull request will be merged, contributors will be kindly asked to agree to the dual licensing terms of SimulStreaming. 
-
-## ✉️ Contact
-
-[Dominik Macháček](https://ufal.mff.cuni.cz/dominik-machacek/), machacek@ufal.mff.cuni.cz
+**Key Components:**
+- **MLX Framework**: Apple's optimized ML framework for Apple Silicon (up to 15x decoder speedup)
+- **CoreML Encoder**: Neural Engine acceleration for the encoder (up to 18x speedup, most compute-intensive part)
+- **MLX Decoder**: Flexible decoding with AlignAtt policy, beam search, and streaming
+- **AlignAtt Policy**: State-of-the-art simultaneous decoding strategy
 

@@ -21,14 +21,84 @@ from token_buffer import TokenBuffer
 import numpy as np
 from .generation_progress import *
 
+# CoreML encoder support
+try:
+    from .coreml_encoder import CoreMLEncoder
+    COREML_AVAILABLE = True
+except ImportError:
+    COREML_AVAILABLE = False
+    CoreMLEncoder = None
+
 DEC_PAD = 50257
 
+TIMING_LOG_CSV = True
 
 import sys
 import wave
 import logging
+import csv
+import time as time_module
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+# CSV file paths for timing logs
+TIMING_DIR = Path("timing_logs_mlx")
+ENCODING_CSV = TIMING_DIR / "encoding_times.csv"
+DECODING_CSV = TIMING_DIR / "decoding_times.csv"
+INFER_CSV = TIMING_DIR / "infer_times.csv"
+
+def _init_timing_csvs():
+    """Initialize CSV files with headers if TIMING_LOG_CSV is enabled"""
+    if not TIMING_LOG_CSV:
+        return
+
+    TIMING_DIR.mkdir(exist_ok=True)
+
+    # Encoding CSV: timestamp, encoder_type, duration_ms
+    if not ENCODING_CSV.exists():
+        with open(ENCODING_CSV, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['timestamp', 'encoder_type', 'duration_ms'])
+
+    # Decoding CSV: timestamp, step, duration_ms, total_tokens
+    if not DECODING_CSV.exists():
+        with open(DECODING_CSV, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['timestamp', 'infer_id', 'step', 'duration_ms', 'total_tokens'])
+
+    # Infer CSV: timestamp, total_duration_ms, num_decode_steps
+    if not INFER_CSV.exists():
+        with open(INFER_CSV, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['timestamp', 'infer_id', 'total_duration_ms', 'num_decode_steps'])
+
+def _log_encoding_time(encoder_type: str, duration_ms: float):
+    """Log encoding time to CSV"""
+    if not TIMING_LOG_CSV:
+        return
+
+    with open(ENCODING_CSV, 'a', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow([time_module.time(), encoder_type, duration_ms])
+
+def _log_decoding_time(infer_id: int, step: int, duration_ms: float, total_tokens: int):
+    """Log decoding step time to CSV"""
+    if not TIMING_LOG_CSV:
+        return
+
+    with open(DECODING_CSV, 'a', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow([time_module.time(), infer_id, step, duration_ms, total_tokens])
+
+def _log_infer_time(infer_id: int, total_duration_ms: float, num_decode_steps: int):
+    """Log total infer time to CSV"""
+    if not TIMING_LOG_CSV:
+        return
+
+    with open(INFER_CSV, 'a', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow([time_module.time(), infer_id, total_duration_ms, num_decode_steps])
 
 class MLXInference:
     def __init__(self, model, parent):
@@ -71,11 +141,53 @@ class PaddedAlignAttWhisper:
         self.log_segments = 0
         if cfg.logdir is not None and not os.path.exists(cfg.logdir):
             os.makedirs(cfg.logdir)
-        
+
+        # Initialize timing CSV files
+        _init_timing_csvs()
+        self.infer_id = 0  # Counter for infer calls
+
         self.model = load_models.load_model(path_or_hf_repo=cfg.model_path, dtype=mx.float16, model_name=cfg.model_name)
-        
+
+        # Initialize CoreML encoder if requested
+        self.use_coreml_encoder = cfg.use_coreml_encoder
+        self.coreml_encoder = None
+
+        if self.use_coreml_encoder:
+            if not COREML_AVAILABLE:
+                logger.warning(
+                    "CoreML encoder requested but not available. "
+                    "Falling back to MLX encoder. "
+                    "Install coremltools: pip install coremltools"
+                )
+                self.use_coreml_encoder = False
+            else:
+                try:
+                    if cfg.coreml_encoder_path:
+                        logger.info(f"Loading CoreML encoder from: {cfg.coreml_encoder_path}")
+                        self.coreml_encoder = CoreMLEncoder(
+                            cfg.coreml_encoder_path,
+                            compute_units=cfg.coreml_compute_units
+                        )
+                    else:
+                        logger.info(f"Searching for CoreML encoder for model: {cfg.model_name}")
+                        self.coreml_encoder = CoreMLEncoder.from_model_name(
+                            cfg.model_name,
+                            compute_units=cfg.coreml_compute_units
+                        )
+                    logger.info("✓ CoreML encoder initialized successfully - using Neural Engine acceleration")
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to initialize CoreML encoder: {e}\n"
+                        f"Falling back to MLX encoder. "
+                        f"To generate CoreML model: cd whisper.cpp/models && ./generate-coreml-model.sh {cfg.model_name}"
+                    )
+                    self.use_coreml_encoder = False
+
         # Check model dtype
-        logger.info(f"Model encoder conv1 weight dtype: {self.model.encoder.conv1.weight.dtype}")
+        if not self.use_coreml_encoder:
+            logger.info(f"Using MLX encoder - Model encoder conv1 weight dtype: {self.model.encoder.conv1.weight.dtype}")
+        else:
+            logger.info("Using CoreML encoder - MLX encoder will be bypassed")
 
         self.decode_options = decoding.DecodingOptions(
             language = cfg.language, 
@@ -280,13 +392,19 @@ class PaddedAlignAttWhisper:
 
     def infer(self, is_last=False):
         import time
-        
+
         # Enable forced evaluation for accurate timing when in DEBUG mode
         FORCE_EVAL = logger.isEnabledFor(logging.DEBUG)
-        
+
+        # Increment infer ID for this call
+        self.infer_id += 1
+        current_infer_id = self.infer_id
+
         t_start = time.time()
-        logger.debug(f"[PERF] infer() started")
-        
+        # logger.debug(f"[PERF] infer() started")
+        logger.critical(f"[PERF] infer() started")
+
+
         new_segment = True
         if len(self.segments) == 0:
             self.logdir_save(mx.array([]), [], {})
@@ -311,7 +429,7 @@ class PaddedAlignAttWhisper:
         t_mel = time.time()
         # mel + padding to 30s
         mel_padded = log_mel_spectrogram(input_segments, n_mels=self.model.dims.n_mels, padding=N_SAMPLES)
-        # trim to 3000
+        # trim to 3000 - NOTE: this codebase's log_mel_spectrogram returns (n_frames, n_mels), not (n_mels, n_frames)!
         mel = pad_or_trim(mel_padded, N_FRAMES, axis=-2)
         # the len of actual audio
         content_mel_len = int((mel_padded.shape[-2] - mel.shape[-2])/2)
@@ -320,12 +438,42 @@ class PaddedAlignAttWhisper:
         logger.debug(f"[PERF]   mel spectrogram: {time.time()-t_mel:.4f}s")
         
         t_enc = time.time()
-        # encode - convert to float16 for efficiency
+        # MLX encoder expects (batch, n_ctx, n_mels) = (1, 3000, 80)
         mel_input = mel[None, :, :].astype(mx.float16)
         logger.debug(f"[PERF]     mel dtype before encoder: {mel_input.dtype}, shape: {mel_input.shape}")
-        encoder_feature = self.model.encoder(mel_input)
+
+        # Use CoreML encoder if available, otherwise fall back to MLX encoder
+        if self.use_coreml_encoder and self.coreml_encoder is not None:
+            # CoreML needs (batch, n_mels, n_ctx) = (1, 80, 3000), so transpose
+            mel_input_coreml = mel.transpose(1, 0)[None, :, :].astype(mx.float32)
+
+            if TIMING_LOG_CSV:
+                mx.eval(mel_input_coreml)
+                t_enc_start = time.time()
+
+            encoder_feature = self.coreml_encoder(mel_input_coreml)
+            encoder_feature = encoder_feature.astype(mx.float16)
+
+            if TIMING_LOG_CSV:
+                mx.eval(encoder_feature)
+                enc_duration = (time.time() - t_enc_start) * 1000  # ms
+                _log_encoding_time("coreml", enc_duration)
+
+        else:
+            if TIMING_LOG_CSV:
+                mx.eval(mel_input)
+                t_enc_start = time.time()
+
+            encoder_feature = self.model.encoder(mel_input)
+
+            if TIMING_LOG_CSV:
+                mx.eval(encoder_feature)
+                enc_duration = (time.time() - t_enc_start) * 1000  # ms
+                _log_encoding_time("mlx", enc_duration)
+
         if FORCE_EVAL:
             mx.eval(encoder_feature)
+
         logger.debug(f"[PERF]     encoder output dtype: {encoder_feature.dtype}")
         logger.debug(f"[PERF]   encoder: {time.time()-t_enc:.4f}s")
         
@@ -390,8 +538,13 @@ class PaddedAlignAttWhisper:
             decode_step += 1
             generation_progress_loop = []
 
+            # Start timing for this decode step (CSV logging only)
+            if TIMING_LOG_CSV:
+                mx.eval(current_tokens)
+                t_decode_step_start = time.time()
+
             tokens_for_logits = current_tokens if new_segment else current_tokens[:,-1:]
-            
+
             t_logits = time.time()
             logits = self.logits(tokens_for_logits, encoder_feature) # B, len(tokens), token dict size
             if FORCE_EVAL:
@@ -506,10 +659,16 @@ class PaddedAlignAttWhisper:
             if content_mel_len - most_attended_frame <= (4 if is_last else self.cfg.frame_threshold):
                 current_tokens = current_tokens[:, :-1]
                 break
-            
+
             for i in range(num_beams):
                 pass
-            
+
+            # End timing for this decode step (CSV logging only)
+            if TIMING_LOG_CSV:
+                mx.eval(current_tokens)
+                decode_step_duration = (time.time() - t_decode_step_start) * 1000  # ms
+                _log_decoding_time(current_infer_id, decode_step, decode_step_duration, current_tokens.shape[1])
+
             logger.debug(f"[PERF]     step {decode_step} total: {time.time()-t_step:.4f}s")
 
         logger.debug(f"[PERF]   total decoding loop ({decode_step} steps): {time.time()-t_decode_start:.4f}s")
@@ -542,7 +701,13 @@ class PaddedAlignAttWhisper:
         logger.debug(f"[PERF]   cache cleanup: {time.time()-t_clean:.4f}s")
 
         self.logdir_save(input_segments, new_hypothesis, generation)
-        logger.debug(f"[PERF] infer() total: {time.time()-t_start:.4f}s")
+
+        # Log total infer time (CSV logging only)
+        if TIMING_LOG_CSV:
+            total_infer_duration = (time.time() - t_start) * 1000  # ms
+            _log_infer_time(current_infer_id, total_infer_duration, decode_step)
+
+        logger.critical(f"[PERF] infer() total: {time.time()-t_start:.4f}s")
         return new_hypothesis, generation
 
     def logdir_save(self, input_segments, new_hypothesis, generation):

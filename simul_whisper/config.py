@@ -18,6 +18,11 @@ class SimulWhisperConfig:
     static_init_prompt: str = field(default=None)
     max_context_tokens: int = field(default=None)
 
+    # CoreML encoder options
+    use_coreml_encoder: bool = field(default=False, metadata={"help": "Use CoreML encoder for faster inference on Apple Silicon"})
+    coreml_encoder_path: str = field(default=None, metadata={"help": "Path to CoreML encoder .mlmodelc directory"})
+    coreml_compute_units: Literal["ALL", "CPU_AND_NE", "CPU_ONLY"] = field(default="ALL", metadata={"help": "CoreML compute units"})
+
     logdir: str = field(default="logdir", metadata={"help": "Directory to save audio segments and tokens for debugging purposes."})
 
 @dataclass
