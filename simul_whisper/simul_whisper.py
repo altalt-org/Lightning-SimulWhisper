@@ -31,7 +31,7 @@ except ImportError:
 
 DEC_PAD = 50257
 
-TIMING_LOG_CSV = True
+TIMING_LOG_CSV = False
 
 import sys
 import wave
