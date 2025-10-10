@@ -1,7 +1,7 @@
-<h1 align="center">SimulStreamingMLX</h1>
+<h1 align="center">Lightning-SimulWhisper</h1>
 
 <p align="center">
-<img src="https://github.com/altalt-org/SimulStreamingMLX/raw/main/tests/timing_visualizations/comprehensive_summary.png" alt="WhisperLiveKit Demo" width="730">
+<img src="https://github.com/altalt-org/Lightning-SimulWhisper/raw/main/tests/timing_visualizations/comprehensive_summary.png" alt="WhisperLiveKit Demo" width="730">
 </p>
 
 <div align="center">
@@ -19,7 +19,7 @@ Zero pytorch dependencies ⛔
 
 15x speedup on encoding, 18x speedup on decoding ⚡
 
-SimulStreamingMLX implements Whisper model for simultaneous transcription using **MLX** (Apple's machine learning framework) and **CoreML** for optimal performance on Apple Silicon devices. It uses the AlignAtt policy for streaming speech recognition.
+Lightning-SimulWhisper implements Whisper model for simultaneous transcription using **MLX** (Apple's machine learning framework) and **CoreML** for optimal performance on Apple Silicon devices. It uses the AlignAtt policy for streaming speech recognition.
 
 ## Performance Results
 
@@ -204,7 +204,7 @@ python simulstreaming_whisper.py test.mp3 \
 
 ## Architecture
 
-SimulStreamingMLX uses a hybrid architecture combining MLX and CoreML:
+Lightning-SimulWhisper uses a hybrid architecture combining MLX and CoreML:
 
 ```
 Audio Input (16kHz mono)
