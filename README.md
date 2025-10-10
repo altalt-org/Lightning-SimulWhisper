@@ -7,8 +7,8 @@
 <p align="center"><b>Real-time, Local Real-time Speech-to-Text on Apple Silicon Devices</b></p>
 
 
-<div align="center" style="background-color: rgba(255, 193, 7, 0.1); border: 1px solid rgba(255, 193, 7, 0.3); border-radius: 8px; padding: 16px; margin: 20px 0; color: #b8860b;">
-  <strong>⚠️ This is an unfinished project. Please feel free to leave issues or pull requests when you find problems ⚠️</strong>
+<div align="center">
+  <img src="warning-callout.svg" width="800" height="80" alt="Project warning">
 </div>
 
 #### SimulStreamingMLX implements Whisper model for simultaneous transcription using **MLX** (Apple's machine learning framework) and **CoreML** for optimal performance on Apple Silicon devices. It uses the AlignAtt policy for streaming speech recognition.
