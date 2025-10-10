@@ -1,0 +1,84 @@
+<svg fill="none" viewBox="0 0 800 40" width="800" height="40" xmlns="http://www.w3.org/2000/svg">
+  <foreignObject width="100%" height="100%">
+    <div xmlns="http://www.w3.org/1999/xhtml">
+      <style>
+        .typewriter {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+        font-size: 16px;
+        font-weight: bold;
+        color: #24292f;
+        margin: 0;
+        padding: 10px;
+        overflow: hidden;
+        white-space: nowrap;
+        max-width: fit-content;
+        width: 0;
+        animation: typing 3s steps(62, end) forwards;
+        display: inline-block;
+        position: relative;
+        }
+
+        .typewriter::after {
+        content: '';
+        position: absolute;
+        right: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 2px;
+        height: 1em;
+        background-color: #24292f;
+        animation: blink 0.75s step-end infinite;
+        }
+
+        @keyframes typing {
+        from {
+        width: 0;
+        }
+        to {
+        width: 100%;
+        }
+        }
+
+        @keyframes blink {
+        from, to {
+        background-color: transparent;
+        }
+        50% {
+        background-color: #24292f;
+        }
+        }
+
+        @media (prefers-color-scheme: dark) {
+        .typewriter {
+        color: #c9d1d9;
+        }
+
+        .typewriter::after {
+        background-color: #c9d1d9;
+        }
+
+        @keyframes blink {
+        from, to {
+        background-color: transparent;
+        }
+        50% {
+        background-color: #c9d1d9;
+        }
+        }
+        }
+
+        .wrapper {
+        text-align: center;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        }
+      </style>
+      <div class="wrapper">
+        <div class="typewriter">Real-time, Local Speech-to-Text on Apple Silicon Devices</div>
+      </div>
+    </div>
+  </foreignObject>
+</svg>
