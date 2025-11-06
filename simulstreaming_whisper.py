@@ -64,7 +64,9 @@ def simulwhisper_args(parser):
 
 
 def simul_asr_factory(args):
-    logger.setLevel(args.log_level)
+    # Convert string log level to logging constant
+    log_level = getattr(logging, args.log_level.upper(), logging.INFO)
+    logger.setLevel(log_level)
     decoder = args.decoder
     if args.beams > 1:
         if decoder == "greedy":

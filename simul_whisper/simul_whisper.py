@@ -22,12 +22,8 @@ import numpy as np
 from .generation_progress import *
 
 # CoreML encoder support
-try:
-    from .coreml_encoder import CoreMLEncoder
-    COREML_AVAILABLE = True
-except ImportError:
-    COREML_AVAILABLE = False
-    CoreMLEncoder = None
+from .coreml_encoder import CoreMLEncoder
+COREML_AVAILABLE = True
 
 DEC_PAD = 50257
 
@@ -401,8 +397,6 @@ class PaddedAlignAttWhisper:
         current_infer_id = self.infer_id
 
         t_start = time.time()
-        # logger.debug(f"[PERF] infer() started")
-        logger.critical(f"[PERF] infer() started")
 
 
         new_segment = True
@@ -707,7 +701,6 @@ class PaddedAlignAttWhisper:
             total_infer_duration = (time.time() - t_start) * 1000  # ms
             _log_infer_time(current_infer_id, total_infer_duration, decode_step)
 
-        logger.critical(f"[PERF] infer() total: {time.time()-t_start:.4f}s")
         return new_hypothesis, generation
 
     def logdir_save(self, input_segments, new_hypothesis, generation):

@@ -84,9 +84,13 @@ def set_logging(args,logger):
         # this format would include module name:
         #    format='%(levelname)s\t%(name)s\t%(message)s')
             format='%(levelname)s\t%(message)s')
-    logger.setLevel(args.log_level)
-    logging.getLogger("simul_whisper").setLevel(args.log_level)
-    logging.getLogger("whisper_streaming").setLevel(args.log_level)
+    # Convert string log level to logging constant
+    log_level = getattr(logging, args.log_level.upper(), logging.INFO)
+    logger.setLevel(log_level)
+    logging.getLogger("simul_whisper").setLevel(log_level)
+    logging.getLogger("whisper_streaming").setLevel(log_level)
+    # Also set for the MLX load_models logger to ensure it's covered
+    logging.getLogger("simul_whisper.mlx_whisper.load_models").setLevel(log_level)
 
 
 def simulation_args(parser):

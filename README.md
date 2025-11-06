@@ -87,20 +87,22 @@ For minimal installation, remove `torchaudio` from `requirements.txt`. This disa
 
 ```bash
 # Basic usage with CoreML acceleration
-python3 simulstreaming_whisper.py audio.wav \
-  --model_name base.en \
+python3 simulstreaming_whisper.py jfk.wav \
+  --model_name base \
   --model_path mlx_base \
   --use_coreml \
-  --language en
+  --language en \
+  --log-level CRITICAL
 
 # With beam search and CIF model
-python3 simulstreaming_whisper.py audio.wav \
+python3 simulstreaming_whisper.py jfk.wav \
   --model_name medium \
   --model_path mlx_medium \
   --use_coreml \
   --beams 3 \
   --cif_ckpt_path cif_model/medium.npz \
-  --language en
+  --language en \
+  --log-level CRITICAL
 ```
 
 ### Real-time Simulation from Audio File
