@@ -21,6 +21,11 @@ Zero pytorch dependencies ⛔
 
 Lightning-SimulWhisper implements Whisper model for simultaneous transcription using **MLX** (Apple's machine learning framework) and **CoreML** for optimal performance on Apple Silicon devices. It uses the AlignAtt policy for streaming speech recognition.
 
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=altalt-org/Lightning-SimulWhisper&type=date&legend=top-left)](https://www.star-history.com/#altalt-org/Lightning-SimulWhisper&type=date&legend=top-left)
+
 ## Performance Results
 
 Using [the original SimulStreaming project](https://github.com/ufal/SimulStreaming) I could barely run the `base` model in real time. Now, I can run `medium` and even `large-v3-turbo` models in real time on my M2 Macbook Pro.
