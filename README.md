@@ -1,3 +1,8 @@
+```text
+Note: this is not the source code for the app Alt. It is a open souced version of the transcription engine we use.
+```
+
+
 <h1 align="center">Lightning-SimulWhisper</h1>
 
 <p align="center">
